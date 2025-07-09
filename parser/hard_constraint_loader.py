@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import List, Dict
 
 
-# Vincoli supportati in questa versione (AGGIORNATO CON SMONTO)
+# Vincoli supportati in questa versione (AGGIORNATO CON TUTTI I VINCOLI)
 _SUPPORTED_HARD_TYPES: set[str] = {
     "incompatibility",
     "max_consecutive_nights",
@@ -21,6 +21,7 @@ _SUPPORTED_HARD_TYPES: set[str] = {
     "workload_balance_hard",
     "mandatory_smonto_after_night",      # AGGIUNTO
     "mandatory_rest_after_smonto",       # AGGIUNTO
+    "no_pm_to_m_transition",             # AGGIUNTO - era mancante
     "no_afternoon_after_morning",
     "max_nights_per_month",
     "weekend_rest_monthly",

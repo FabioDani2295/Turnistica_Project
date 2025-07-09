@@ -1,6 +1,5 @@
 [
   { "type": "coverage_minimum",            "params": { "morning": 2, "afternoon": 2, "night": 1, "smonto": 0 } },
-  { "type": "incompatibility",             "params": { "pairs": [ ["Marco Bianchi","Giulia Ferretti"], ["Roberto De Luca","Lucia Conti"] ] } },
   { "type": "max_consecutive_nights",      "params": { "max": 3 } },
   { "type": "max_consecutive_work_days",   "params": { "max_days": 6 } },
   { "type": "min_rest_hours",              "params": { "hours": 11 } },
