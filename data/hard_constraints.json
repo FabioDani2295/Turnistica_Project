@@ -1,0 +1,68 @@
+[
+  {
+    "type": "incompatibility",
+    "params": {
+      "pairs": [
+        ["Marco Bianchi", "Giulia Ferretti"]
+      ]
+    }
+  },
+  {
+    "type": "max_consecutive_nights",
+    "params": {
+      "max": 3
+    }
+  },
+  {
+    "type": "max_consecutive_work_days",
+    "params": {
+      "max_days": 6
+    }
+  },
+  {
+    "type": "min_rest_hours",
+    "params": {
+      "hours": 11
+    }
+  },
+  {
+    "type": "coverage_minimum",
+    "params": {
+      "morning": 2,
+      "afternoon": 2,
+      "night": 1
+    }
+  },
+  {
+    "type": "workload_balance_hard",
+    "params": {
+      "tolerance": 0.25
+    }
+  },
+  {
+    "type": "max_nights_per_month",
+    "params": {
+      "max_monthly": 4
+    }
+  },
+  {
+    "type": "weekend_rest_monthly",
+    "params": {
+      "min_weekends": 1
+    }
+  },
+  {
+    "type": "shift_balance_morning_afternoon",
+    "params": {
+      "max_discrepancy": 0.65
+    }
+  },
+  {
+    "type": "mandatory_smonto_after_night",
+    "params": {}
+  },
+  {
+    "type": "mandatory_rest_after_smonto",
+    "params": {}
+  }
+]

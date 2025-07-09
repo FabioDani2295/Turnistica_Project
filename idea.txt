@@ -1,0 +1,25 @@
+- Progettare il sistema come una pipeline di script modulari, ciascuno con una responsabilità specifica (Single Responsibility Principle), permette non solo manutenibilità ed estendibilità, ma anche una facile integrazione successiva di un LLM (ad esempio per generare input o vincoli a partire da testo libero).
+/nurse_scheduler/
+│
+├── main.py                            # Script principale
+├── data/
+│   ├── nurses.json                    # Infermieri e preferenze
+│   ├── hard_constraints.json         # Vincoli rigidi
+│   ├── soft_constraints.json         # Vincoli preferibili
+│
+├── parser/
+│   ├── nurse_loader.py               # Parsing e validazione infermieri
+│   ├── hard_constraint_loader.py     # Parsing vincoli rigidi
+│   ├── soft_constraint_loader.py     # Parsing vincoli flessibili
+│
+├── model/
+│   ├── scheduler.py                  # Classe OR-Tools scheduler
+│   └── constraint_registry.py        # Mappatura vincoli → implementazioni
+│
+├── utils/
+│   ├── enums.py                      # ShiftType, AbsenceType, ecc.
+│   ├── validator.py                  # Schema JSON validator (facoltativo)
+│   └── config.py                     # Config globali (es. turni, durata, ecc.)
+│
+└── outputs/
+    └── schedule_output.json          # Risultati generati

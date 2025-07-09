@@ -1,0 +1,3 @@
+# requirements.txt
+ortools==9.8.3296
+jsonschema==4.21.1  # opzionale: solo se usi il validator
