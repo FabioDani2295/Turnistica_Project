@@ -86,17 +86,16 @@ class ScheduleFormatter:
         # Colonne: Nome, Ore Contratto, Ore Effettive, Differenza
         header = f"{'Infermiere':<18} {'OreCtr':<6} {'OreEff':<6} {'Diff':<5}"
 
-        # Date (centrate, 4 caratteri ciascuna)
+        # Date complete con giorno della settimana e data (10 caratteri)
         for date_label in self.date_labels:
-            # Prende solo giorno della settimana e giorno (es. "L07")
-            short_label = date_label[:3] + date_label[4:6]  # "Lun 01/07" -> "Lun01"
-            header += f" {short_label[:4]:^4}"
+            header += f" {date_label:^10}"
 
         print(header)
 
     def _print_separator(self) -> None:
         """Stampa linea separatrice."""
-        width = 36 + (5 * self.num_days)  # 18+6+6+5+1 + giorni*5
+        # 18+6+6+5+1 = 36 caratteri fissi, poi 11 caratteri per ogni giorno
+        width = 36 + (11 * self.num_days)
         print("-" * width)
 
     def _print_nurse_row(self, nurse: Nurse, shifts: List[str]) -> None:
@@ -127,7 +126,7 @@ class ScheduleFormatter:
 
         # Turni
         for shift in shifts:
-            row += f"  {shift:^2}"
+            row += f" {shift:^10}"
 
         print(row)
 
@@ -210,18 +209,6 @@ class ScheduleFormatter:
         print(f"   Differenza complessiva:  {overall_diff:+.0f}h")
         print()
 
-        # Copertura per giorno
-        print("📅 COPERTURA GIORNALIERA:")
-        for day_idx, date_label in enumerate(self.date_labels):
-            morning_staff = sum(1 for nurse_shifts in shift_matrix if nurse_shifts[day_idx] == 'M')
-            afternoon_staff = sum(1 for nurse_shifts in shift_matrix if nurse_shifts[day_idx] == 'P')
-            night_staff = sum(1 for nurse_shifts in shift_matrix if nurse_shifts[day_idx] == 'N')
-
-            short_label = date_label[:10]  # Primi 10 caratteri
-            print(f"   📆 {short_label:<10} | M:{morning_staff} P:{afternoon_staff} N:{night_staff}")
-
-        print()
-
 
 def print_compact_schedule(schedule: List[Dict[str, Any]], date_labels: List[str], period_desc: str) -> None:
     """
@@ -242,5 +229,4 @@ def print_compact_schedule(schedule: List[Dict[str, Any]], date_labels: List[str
     from model.nurse import Nurse
     nurses = [Nurse(name=name, contracted_hours=160) for name in sorted(all_nurses)]  # 160h = esempio mensile
 
-    formatter = ScheduleFormatter(nurses, date_labels, period_desc)
-    formatter.print_schedule_table(schedule)
+    formatter = ScheduleFormatter(nurses, date_labels, period_desc)    formatter.print_schedule_table(schedule)
