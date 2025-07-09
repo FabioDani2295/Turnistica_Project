@@ -5,7 +5,7 @@ Enumerazioni condivise in tutto il progetto.
 CORRETTO: Gestione corretta dell'iterazione su ShiftType.
 """
 
-from enum import IntEnum
+from enum import IntEnum, Enum
 
 
 class ShiftType(IntEnum):
@@ -21,7 +21,7 @@ class ShiftType(IntEnum):
         return self.name.capitalize()
 
 
-class AbsenceType(IntEnum):
+class AbsenceType(Enum):
     """Tipologie di assenza (verranno usate in fase successiva)."""
 
     SICK = "malattia"
@@ -29,5 +29,4 @@ class AbsenceType(IntEnum):
     PERSONAL = "permesso"
     TRAINING = "formazione"
 
-    def __str__(self) -> str:
-        return self.value
+    def __str__(self) -> str:        return self.value
