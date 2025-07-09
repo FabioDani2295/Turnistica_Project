@@ -6,7 +6,7 @@ Carica dati da file JSON, costruisce il modello OR-Tools, risolve il problema
 e visualizza il piano turni risultante. In caso di infeasibility, esegue
 analisi diagnostica automatica.
 
-Supporta pianificazione per periodi personalizzabili (settimane, mesi, periodi custom).
+Supporta pianificazione per periodi personalizzabili (settimane, mesi, periodi custom). okook
 """
 
 import sys
