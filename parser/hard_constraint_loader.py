@@ -1,11 +1,7 @@
 """
-parser/hard_constraint_loader.py
---------------------------------
-Parsing e validazione del file JSON dei vincoli rigidi (hard constraints).
-Restituisce una lista di dizionari strutturati pronta per essere
-instradata al registry vincolistico del motore OR-Tools.
-
-MODIFICATO: Aggiunti nuovi tipi di vincolo supportati inclusi vincoli smonto.
+Hard constraint
+Sono regole vincolanti che non possono mai essere violate. Vengono modellate tramite chiamate a model.Add(...), model.AddAllDifferent(...), ecc.
+Se il modello non trova alcuna assegnazione che rispetti tutte le hard constraint, restituisce uno stato INFEASIBLE.
 """
 
 from __future__ import annotations

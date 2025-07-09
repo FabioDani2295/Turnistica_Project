@@ -1,8 +1,7 @@
 """
-parser/soft_constraint_loader.py
---------------------------------
-Parsing e validazione del file JSON dei vincoli preferibili (soft constraints).
-Ogni vincolo deve avere: type, params, weight.
+Soft constraint (o preferenza)
+Rappresentano obiettivi di qualità, non requisiti assoluti.
+Per “soft constraint” si intende infatti una regola che idealmente si vorrebbe soddisfare, ma che—se non è possibile—può essere infranta a fronte di una penalità.
 """
 
 from __future__ import annotations

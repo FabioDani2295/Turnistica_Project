@@ -229,4 +229,5 @@ def print_compact_schedule(schedule: List[Dict[str, Any]], date_labels: List[str
     from model.nurse import Nurse
     nurses = [Nurse(name=name, contracted_hours=160) for name in sorted(all_nurses)]  # 160h = esempio mensile
 
-    formatter = ScheduleFormatter(nurses, date_labels, period_desc)    formatter.print_schedule_table(schedule)
+    formatter = ScheduleFormatter(nurses, date_labels, period_desc)
+    formatter.print_schedule_table(schedule)
