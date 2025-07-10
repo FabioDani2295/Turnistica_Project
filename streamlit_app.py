@@ -1,3 +1,8 @@
+"""
+streamlit_app.py - AGGIORNATO PER WEEKEND DETECTION
+===================================================
+"""
+
 import streamlit as st
 import os
 import calendar
@@ -26,6 +31,43 @@ ITALIAN_WEEKDAYS = {
 
 def main():
     st.title("🏥 Visualizzazione Turni Infermieristici - Vista Mensile")
+    
+    # CSS personalizzato per allargare la visualizzazione e mostrare più colonne
+    st.markdown("""
+    <style>
+    .main .block-container {
+        max-width: 100% !important;
+        padding-left: 0.5rem;
+        padding-right: 0.5rem;
+    }
+    
+    /* Allarga la tabella dataframe per mostrare più colonne */
+    .stDataFrame {
+        width: 100% !important;
+    }
+    
+    .stDataFrame > div {
+        width: 100% !important;
+        overflow-x: auto;
+    }
+    
+    /* Ottimizza le celle per mostrare più colonne */
+    .stDataFrame td, .stDataFrame th {
+        font-size: 12px !important;
+        white-space: nowrap;
+        text-align: center;
+        padding: 4px 6px !important;
+        min-width: 45px;
+        max-width: 60px;
+    }
+    
+    /* Colonne più strette per mostrarne di più */
+    .stDataFrame table {
+        table-layout: auto !important;
+        width: 100% !important;
+    }
+    </style>
+    """, unsafe_allow_html=True)
 
     # Sidebar: percorso cartella dati
     default_folder = os.path.join(os.getcwd(), "data")
@@ -49,6 +91,24 @@ def main():
     date_labels = [start_date + timedelta(days=i) for i in range(total_days)]
     period_desc = f"{month_name} {year}"
 
+    # NUOVO: Calcola start_weekday
+    start_weekday = start_date.weekday()  # 0=lunedì, 6=domenica
+
+    # Info periodo nella sidebar
+    st.sidebar.markdown("---")
+    st.sidebar.markdown(f"**📅 Periodo selezionato:**")
+    st.sidebar.markdown(f"{period_desc} ({total_days} giorni)")
+    st.sidebar.markdown(f"Inizio: {ITALIAN_WEEKDAYS[start_weekday]} {start_date.strftime('%d/%m')}")
+
+    # Mostra weekend identificati
+    temp_scheduler = Scheduler([], [], [], total_days, start_weekday=start_weekday)
+    weekends = temp_scheduler.get_weekend_days()
+    if weekends:
+        weekend_str = ", ".join([f"{s+1}-{d+1}" for s, d in weekends])
+        st.sidebar.markdown(f"🏖️ Weekend: giorni {weekend_str}")
+    else:
+        st.sidebar.markdown("🏖️ Weekend: nessuno completo")
+
     # Pulsante per generare turni
     if st.button("🔄 Genera Turni", type="primary"):
         with st.spinner('Generazione turni in corso...'):
@@ -68,7 +128,13 @@ def main():
                     st.metric("🔓 Vincoli Soft", len(soft_constraints))
 
                 # Calcolo piano per l'intero mese
-                scheduler = Scheduler(nurses, hard_constraints, soft_constraints, num_days=total_days)
+                scheduler = Scheduler(
+                    nurses,
+                    hard_constraints,
+                    soft_constraints,
+                    num_days=total_days,
+                    start_weekday=start_weekday  # NUOVO parametro
+                )
                 status, schedule = scheduler.solve(max_seconds=max_time)
 
                 if status == cp_model.INFEASIBLE:
@@ -89,12 +155,18 @@ def main():
                 formatter = ScheduleFormatter(nurses, [d.strftime("%d/%m") for d in date_labels], period_desc)
                 shift_matrix = formatter._build_shift_matrix(schedule)
 
-                # Creazione DataFrame dei turni con nomi colonne univoci
+                # Creazione DataFrame dei turni con weekend highlighting
                 columns = []
+                weekend_columns = set()
+
                 for i, d in enumerate(date_labels):
                     day_name = ITALIAN_WEEKDAYS[d.weekday()]
                     col_name = f"{day_name} {d.day:02d}"
                     columns.append(col_name)
+
+                    # NUOVO: Marca le colonne weekend per evidenziazione
+                    if d.weekday() in [5, 6]:  # Sabato o domenica
+                        weekend_columns.add(col_name)
 
                 # Dati per il DataFrame principale
                 data_dict = {}
@@ -120,26 +192,113 @@ def main():
 
                 df = pd.DataFrame(data_dict, index=[n.name for n in nurses])
 
-                # Visualizzazione tabella turni SENZA styling problematico
+                # Visualizzazione tabella turni con evidenziazione weekend
                 st.subheader(f"📅 Turni per {period_desc}")
 
-                # Evidenzia weekend manualmente nel header
-                header_html = "<tr><th></th>"
-                for col in df.columns:
-                    if any(day in col for day in ["Sab", "Dom"]) and col not in ["Ore Ctr", "Ore Eff", "Diff"]:
-                        header_html += f'<th style="background-color: #e3f2fd">{col}</th>'
-                    else:
-                        header_html += f"<th>{col}</th>"
-                header_html += "</tr>"
+                # Stile per evidenziare weekend
+                def highlight_weekends(x):
+                    styles = pd.DataFrame('', index=x.index, columns=x.columns)
+                    for col in x.columns:
+                        if col in weekend_columns:
+                            styles[col] = 'background-color: #1565c0; color: white'
+                    return styles
 
-                # Mostra DataFrame senza styling
-                st.dataframe(df, use_container_width=True)
+                # Mostra DataFrame con styling ALLARGATO
+                styled_df = df.style.apply(highlight_weekends, axis=None)
+                st.dataframe(
+                    styled_df, 
+                    use_container_width=True
+                )
 
                 # Legenda
                 st.caption(
-                    "**Legenda**: M=Mattino, P=Pomeriggio, N=Notte, S=Smonto, R=Riposo | Weekend evidenziati in blu | Smonto NON conta come ore lavorate")
+                    "**Legenda**: M=Mattino, P=Pomeriggio, N=Notte, S=Smonto, R=Riposo | "
+                    "🏖️ Weekend evidenziati in blu scuro | Smonto NON conta come ore lavorate")
 
-                # Statistiche dettagliate
+                # NUOVO: Analisi weekend liberi
+                # NUOVO: Analisi weekend liberi (AGGIORNATA per 2+ weekend)
+                st.subheader("🏖️ Analisi Weekend Liberi")
+
+                if weekends:
+                    weekend_analysis = []
+                    total_target_met = 0  # Quanti infermieri hanno raggiunto l'obiettivo di 2+ weekend
+
+                    for i, nurse in enumerate(nurses):
+                        free_weekends = 0
+                        weekend_details = []
+
+                        for w_idx, (saturday, sunday) in enumerate(weekends):
+                            is_free = (shift_matrix[i][saturday] == 'R' and shift_matrix[i][sunday] == 'R')
+                            if is_free:
+                                free_weekends += 1
+                                weekend_details.append(f"W{w_idx + 1}")
+
+                        # Determina se ha raggiunto l'obiettivo (2+ weekend liberi)
+                        target_met = free_weekends >= 2
+                        if target_met:
+                            total_target_met += 1
+
+                        weekend_analysis.append({
+                            "Infermiere": nurse.name,
+                            "Weekend liberi": free_weekends,
+                            "Weekend totali": len(weekends),
+                            "Obiettivo (≥2)": "✅" if target_met else "❌",
+                            "Quali": ", ".join(weekend_details) if weekend_details else "Nessuno"
+                        })
+
+                    weekend_df = pd.DataFrame(weekend_analysis)
+                    st.dataframe(weekend_df, use_container_width=True)
+
+                    # Statistiche obiettivo
+                    col1, col2, col3 = st.columns(3)
+
+                    with col1:
+                        avg_free = sum(w["Weekend liberi"] for w in weekend_analysis) / len(weekend_analysis)
+                        st.metric("Media weekend liberi", f"{avg_free:.1f}")
+
+                    with col2:
+                        target_percentage = (total_target_met / len(nurses)) * 100
+                        st.metric("Obiettivo raggiunto", f"{total_target_met}/{len(nurses)}",
+                                  delta=f"{target_percentage:.0f}%")
+
+                    with col3:
+                        st.metric("Weekend disponibili", f"{len(weekends)}")
+
+                    # Analisi distribuzione
+                    if len(weekends) >= 2:
+                        distribution = {}
+                        for analysis in weekend_analysis:
+                            count = analysis["Weekend liberi"]
+                            distribution[count] = distribution.get(count, 0) + 1
+
+                        st.subheader("📊 Distribuzione Weekend Liberi")
+                        dist_data = []
+                        for free_count in sorted(distribution.keys()):
+                            dist_data.append({
+                                "Weekend liberi": free_count,
+                                "Infermieri": distribution[free_count],
+                                "Percentuale": f"{(distribution[free_count] / len(nurses) * 100):.1f}%"
+                            })
+
+                        dist_df = pd.DataFrame(dist_data)
+                        st.dataframe(dist_df, use_container_width=True)
+
+                        # Valutazione qualità soluzione
+                        if target_percentage >= 80:
+                            st.success("🎯 Ottima distribuzione! La maggior parte degli infermieri ha ≥2 weekend liberi")
+                        elif target_percentage >= 60:
+                            st.warning(
+                                "⚠️ Distribuzione accettabile, ma alcuni infermieri hanno meno di 2 weekend liberi")
+                        else:
+                            st.error(
+                                "❌ Distribuzione non ottimale. Considera di rilassare altri vincoli per migliorare i weekend liberi")
+                    else:
+                        st.warning("⚠️ Periodo troppo breve per avere 2 weekend completi")
+
+                else:
+                    st.info("ℹ️ Nessun weekend completo nel periodo selezionato")
+
+                # Statistiche dettagliate (resto del codice invariato)
                 st.subheader("📊 Statistiche Dettagliate")
 
                 stats_data = []
@@ -218,11 +377,18 @@ def main():
             1. Seleziona il mese e l'anno dal menu laterale
             2. Clicca su 'Genera Turni'
             3. Il sistema genererà automaticamente i turni rispettando tutti i vincoli
+            4. I weekend (sabato+domenica) saranno evidenziati in blu
+            5. Il soft constraint premia infermieri con almeno un weekend completo libero
 
             ### File richiesti nella cartella dati:
             - `nurses.json`: Elenco infermieri e ore contrattuali
             - `hard_constraints.json`: Vincoli obbligatori
-            - `soft_constraints.json`: Preferenze (opzionale)
+            - `soft_constraints.json`: Preferenze (include weekend_rest)
+            
+            ### Soft constraint weekend:
+            Il sistema cerca di assegnare almeno un weekend completo (sabato+domenica) 
+            libero a ogni infermiere, riconoscendo automaticamente i veri weekend 
+            basandosi sul calendario.
             """)
 
 

@@ -17,6 +17,7 @@ _SUPPORTED_SOFT_TYPES: set[str] = {
     "equity",
     "workload_balance",
     "weekend_rest",  # AGGIUNTO!
+    "shift_blocks",  # AGGIUNTO! Premia blocchi consecutivi di turni uguali
 }
 
 

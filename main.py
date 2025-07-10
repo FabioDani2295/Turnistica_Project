@@ -1,12 +1,7 @@
 """
-main.py
--------
-Punto di ingresso principale per il sistema di turnazione infermieristica.
-Carica dati da file JSON, costruisce il modello OR-Tools, risolve il problema
-e visualizza il piano turni risultante. In caso di infeasibility, esegue
-analisi diagnostica automatica.
-
-Supporta solo pianificazione mensile basata sul calendario reale.
+main.py - AGGIORNATO
+--------------------
+Passa il giorno della settimana di partenza al Scheduler.
 """
 
 import sys
@@ -44,6 +39,9 @@ def main():
         # Pianificazione automatica del prossimo mese
         start_date, num_days, period_desc = get_next_month_period()
 
+        # NUOVO: Ottieni il giorno della settimana di partenza
+        start_weekday = start_date.weekday()  # 0=lunedì, 6=domenica
+
         # Genera etichette date
         dm = DateManager(start_date)
         date_labels = dm.generate_date_labels(start_date, num_days)
@@ -58,6 +56,15 @@ def main():
         print(f"🔓 Vincoli flessibili:  {len(soft_constraints)}")
         print(f"📅 Periodo:             {period_desc}")
         print(f"📊 Giorni da pianificare: {num_days} (mensile)")
+        print(f"📆 Inizio:              {start_date.strftime('%A')} {start_date.strftime('%d/%m/%Y')}")
+
+        # Mostra weekend identificati
+        temp_scheduler = Scheduler([], [], [], num_days, start_weekday=start_weekday)
+        weekends = temp_scheduler.get_weekend_days()
+        if weekends:
+            print(f"🏖️  Weekend nel periodo:   {len(weekends)} (giorni {[f'{s+1}-{d+1}' for s,d in weekends]})")
+        else:
+            print("🏖️  Weekend nel periodo:   Nessun weekend completo")
         print()
 
         # Risoluzione
@@ -67,6 +74,7 @@ def main():
             hard_constraints=hard_constraints,
             soft_constraints=soft_constraints,
             num_days=num_days,
+            start_weekday=start_weekday  # NUOVO parametro
         )
 
         status, schedule = scheduler.solve(max_seconds=120.0)  # Più tempo per periodi lunghi

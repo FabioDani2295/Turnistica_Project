@@ -1,13 +1,12 @@
 [
   { "type": "coverage_minimum",            "params": { "morning": 2, "afternoon": 2, "night": 1, "smonto": 0 } },
   { "type": "max_consecutive_nights",      "params": { "max": 3 } },
-  { "type": "max_consecutive_work_days",   "params": { "max_days": 6 } },
-  { "type": "min_rest_hours",              "params": { "hours": 11 } },
+  { "type": "max_consecutive_work_days",   "params": { "max_days": 5 } },
   { "type": "no_pm_to_m_transition",       "params": {} },
   { "type": "no_afternoon_after_morning",  "params": {} },
   { "type": "mandatory_smonto_after_night","params": {} },
   { "type": "mandatory_rest_after_smonto", "params": {} },
-  { "type": "shift_balance_morning_afternoon","params": { "max_discrepancy": 0.6 } },
+  { "type": "shift_balance_morning_afternoon","params": { "max_discrepancy": 0.5 } },
   { "type": "workload_balance_hard",       "params": { "tolerance": 0.25, "daily_shifts": 5 } },
-  { "type": "max_nights_per_month",        "params": { "max_monthly": 4 } }
+  { "type": "max_nights_per_month",        "params": { "max_monthly": 6 } }
 ]

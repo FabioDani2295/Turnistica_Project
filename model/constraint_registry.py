@@ -290,30 +290,56 @@ def hc_max_nights_per_month(
         tot_n = sum(nurse_shift[i, d, ShiftType.NIGHT.value] for d in range(num_days))
         model.Add(tot_n <= lim)
 
+
 @registry.hard_constraint("weekend_rest_monthly")
 def hc_weekend_rest_monthly(
-    model: cp_model.CpModel,
-    nurse_shift,
-    nurses: List[Nurse],
-    params,
-    num_days: int
+        model: cp_model.CpModel,
+        nurse_shift,
+        nurses: List[Nurse],
+        params,
+        num_days: int,
+        start_weekday: int = 0  # NUOVO parametro
 ):
-    """Almeno free_weekends weekend liberi (sab+dom)"""
+    """
+    Hard constraint: almeno free_weekends weekend liberi veri (sab+dom).
+    Ora usa il calendario reale per identificare i weekend.
+    """
     free_req = int(params.get("free_weekends", 2))
-    if num_days < 7:
+
+    # Trova weekend veri
+    weekend_pairs = []
+    for day in range(num_days - 1):
+        weekday = (start_weekday + day) % 7
+        next_weekday = (start_weekday + day + 1) % 7
+
+        if weekday == 5 and next_weekday == 6:  # Sabato + Domenica
+            weekend_pairs.append((day, day + 1))
+
+    if len(weekend_pairs) < free_req:
+        # Non ci sono abbastanza weekend nel periodo per soddisfare il vincolo
         return
-    weekends = [(d, d+1) for d in range(num_days-1) if d % 7 == 5]
+
     for i in range(len(nurses)):
-        flags: List[cp_model.BoolVar] = []
-        for w, (sat, sun) in enumerate(weekends):
-            sum_sat = sum(nurse_shift[i, sat, s.value] for s in ShiftType)
-            sum_sun = sum(nurse_shift[i, sun, s.value] for s in ShiftType)
-            model.Add(sum_sat == sum_sun)
-            free_w = model.NewBoolVar(f"n{i}_w{w}_free")
-            model.Add(sum_sat == 0).OnlyEnforceIf(free_w)
-            model.Add(sum_sat > 0).OnlyEnforceIf(free_w.Not())
-            flags.append(free_w)
-        model.Add(sum(flags) >= free_req)
+        free_weekend_flags = []
+
+        for w_idx, (saturday, sunday) in enumerate(weekend_pairs):
+            # Variabile: questo weekend è libero?
+            weekend_free = model.NewBoolVar(f"n{i}_w{w_idx}_free")
+
+            # Conta turni nel weekend
+            saturday_shifts = sum(nurse_shift[i, saturday, s.value] for s in ShiftType)
+            sunday_shifts = sum(nurse_shift[i, sunday, s.value] for s in ShiftType)
+            total_shifts = saturday_shifts + sunday_shifts
+
+            # Weekend libero solo se nessun turno
+            model.Add(total_shifts == 0).OnlyEnforceIf(weekend_free)
+            model.Add(total_shifts > 0).OnlyEnforceIf(weekend_free.Not())
+
+            free_weekend_flags.append(weekend_free)
+
+        # Almeno free_req weekend liberi
+        if free_weekend_flags:
+            model.Add(sum(free_weekend_flags) >= free_req)
 
 # -----------------------------
 # SOFT CONSTRAINTS
@@ -347,43 +373,182 @@ def sc_weekend_rest(
         nurses: List[Nurse],
         params,
         num_days: int,
-        weight: int
+        weight: int,
+        start_weekday: int = 0
 ) -> List[SoftTerm]:
     """
-    Soft constraint: premia ogni infermiere che ha almeno una coppia
-    di giorni consecutivi liberi (potenziale weekend).
+    Soft constraint EQUO per weekend liberi:
+    1. PRIORITÀ ALTA: Ogni infermiere ha almeno 1 weekend libero
+    2. PRIORITÀ MEDIA: Chi può, arriva a 2 weekend liberi
+    3. BONUS BASSO: Chi può, arriva a 3+ weekend liberi
 
-    Questo approccio è agnostico rispetto al giorno della settimana iniziale.
+    Questo evita che alcuni abbiano 2 weekend e altri zero.
     """
     terms = []
 
+    # Trova tutti i weekend veri nel periodo
+    weekend_pairs = []
+    for day in range(num_days - 1):
+        weekday = (start_weekday + day) % 7
+        next_weekday = (start_weekday + day + 1) % 7
+
+        if weekday == 5 and next_weekday == 6:
+            weekend_pairs.append((day, day + 1))
+
+    if not weekend_pairs:
+        return terms
+
     for i in range(len(nurses)):
-        # Per ogni infermiere, trova tutte le coppie di giorni consecutivi liberi
-        free_pairs = []
+        # Lista di variabili boolean: ogni weekend è libero?
+        free_weekends = []
 
-        # Controlla ogni coppia di giorni consecutivi
-        for d in range(num_days - 1):
-            # Variabile: questa coppia di giorni è libera?
-            pair_free = model.NewBoolVar(f"nurse{i}_days{d}_{d + 1}_free")
+        for weekend_idx, (saturday, sunday) in enumerate(weekend_pairs):
+            weekend_free = model.NewBoolVar(f"nurse{i}_weekend{weekend_idx}_free")
 
-            # La coppia è libera se non ci sono turni in nessuno dei due giorni
-            day1_shifts = sum(nurse_shift[i, d, s.value] for s in ShiftType)
-            day2_shifts = sum(nurse_shift[i, d + 1, s.value] for s in ShiftType)
+            # Conta turni nel weekend
+            saturday_shifts = sum(nurse_shift[i, saturday, s.value] for s in ShiftType)
+            sunday_shifts = sum(nurse_shift[i, sunday, s.value] for s in ShiftType)
+            total_weekend_shifts = saturday_shifts + sunday_shifts
 
-            model.Add(day1_shifts + day2_shifts == 0).OnlyEnforceIf(pair_free)
-            model.Add(day1_shifts + day2_shifts > 0).OnlyEnforceIf(pair_free.Not())
+            # Il weekend è libero solo se non ci sono turni
+            model.Add(total_weekend_shifts == 0).OnlyEnforceIf(weekend_free)
+            model.Add(total_weekend_shifts > 0).OnlyEnforceIf(weekend_free.Not())
 
-            free_pairs.append(pair_free)
+            free_weekends.append(weekend_free)
 
-        # Ha almeno una coppia di giorni liberi?
-        if free_pairs:
-            has_free_pair = model.NewBoolVar(f"nurse{i}_has_free_pair")
-            model.AddBoolOr(free_pairs).OnlyEnforceIf(has_free_pair)
-            model.AddBoolAnd([p.Not() for p in free_pairs]).OnlyEnforceIf(has_free_pair.Not())
+        if not free_weekends:
+            continue
 
-            # Premio per avere almeno una coppia libera
-            terms.append(SoftTerm(has_free_pair, weight))
+        # STRATEGIA EQUA: Pesi decrescenti per incentivare distribuzione equa
 
+        # 1. PRIORITÀ MASSIMA: Almeno 1 weekend libero (peso x3)
+        if len(weekend_pairs) >= 1:
+            has_1_free = model.NewBoolVar(f"nurse{i}_has_1_weekend")
+            model.Add(sum(free_weekends) >= 1).OnlyEnforceIf(has_1_free)
+            model.Add(sum(free_weekends) == 0).OnlyEnforceIf(has_1_free.Not())
+            terms.append(SoftTerm(has_1_free, weight * 3))  # PESO TRIPLICATO
+
+        # 2. PRIORITÀ MEDIA: Secondo weekend libero (peso normale)
+        if len(weekend_pairs) >= 2:
+            has_2_free = model.NewBoolVar(f"nurse{i}_has_2_weekends")
+            model.Add(sum(free_weekends) >= 2).OnlyEnforceIf(has_2_free)
+            model.Add(sum(free_weekends) <= 1).OnlyEnforceIf(has_2_free.Not())
+            terms.append(SoftTerm(has_2_free, weight))  # PESO NORMALE
+
+        # 3. BONUS BASSO: Terzo weekend libero (peso ridotto)
+        if len(weekend_pairs) >= 3:
+            has_3_free = model.NewBoolVar(f"nurse{i}_has_3_weekends")
+            model.Add(sum(free_weekends) >= 3).OnlyEnforceIf(has_3_free)
+            model.Add(sum(free_weekends) <= 2).OnlyEnforceIf(has_3_free.Not())
+            terms.append(SoftTerm(has_3_free, weight // 3))  # PESO RIDOTTO
+
+        # 4. EXTRA: Quarto weekend se disponibile (bonus minimo)
+        if len(weekend_pairs) >= 4:
+            has_4_free = model.NewBoolVar(f"nurse{i}_has_4_weekends")
+            model.Add(sum(free_weekends) >= 4).OnlyEnforceIf(has_4_free)
+            model.Add(sum(free_weekends) <= 3).OnlyEnforceIf(has_4_free.Not())
+            terms.append(SoftTerm(has_4_free, weight // 6))  # PESO MINIMO
+
+    return terms
+
+@registry.soft_constraint("shift_blocks")
+def sc_shift_blocks(
+    model: cp_model.CpModel,
+    nurse_shift,
+    nurses: List[Nurse],
+    params,
+    num_days: int,
+    weight: int,
+    start_weekday: int = 0
+) -> List[SoftTerm]:
+    """
+    Soft constraint: premia la formazione di blocchi consecutivi di turni uguali.
+    
+    Esempi preferiti:
+    - 3 mattine consecutive + riposo + 2 notti + smonto + riposo
+    - 2 pomeriggi + riposo + 3 mattine + riposo
+    
+    Parametri:
+    - min_block_size: dimensione minima blocco per ottenere premio (default 2)
+    - bonus_block_size: dimensione blocco che ottiene bonus extra (default 3)
+    """
+    terms = []
+    
+    min_block_size = params.get("min_block_size", 2)
+    bonus_block_size = params.get("bonus_block_size", 3)
+    
+    # Solo turni lavorativi (escludiamo SMONTO e RIPOSO dai blocchi)
+    working_shifts = [ShiftType.MORNING, ShiftType.AFTERNOON, ShiftType.NIGHT]
+    
+    for i in range(len(nurses)):
+        for shift_type in working_shifts:
+            shift_val = shift_type.value
+            
+            # Trova blocchi consecutivi di questo tipo di turno
+            for start_day in range(num_days - min_block_size + 1):
+                
+                # Blocco di dimensione minima (2-3 giorni)
+                for block_size in range(min_block_size, min(bonus_block_size + 1, num_days - start_day + 1)):
+                    
+                    # Variabile: esiste un blocco di questa dimensione che inizia in start_day?
+                    block_var = model.NewBoolVar(f"nurse{i}_block_{shift_type.name.lower()}_{start_day}_{block_size}")
+                    
+                    # Condizioni per il blocco:
+                    block_conditions = []
+                    
+                    # 1. Tutti i giorni del blocco devono avere questo turno
+                    for day_offset in range(block_size):
+                        day = start_day + day_offset
+                        block_conditions.append(nurse_shift[i, day, shift_val])
+                    
+                    # 2. Il giorno prima del blocco (se esiste) NON deve avere questo turno
+                    if start_day > 0:
+                        block_conditions.append(nurse_shift[i, start_day - 1, shift_val].Not())
+                    
+                    # 3. Il giorno dopo il blocco (se esiste) NON deve avere questo turno
+                    if start_day + block_size < num_days:
+                        block_conditions.append(nurse_shift[i, start_day + block_size, shift_val].Not())
+                    
+                    # Il blocco esiste solo se tutte le condizioni sono vere
+                    model.AddBoolAnd(block_conditions).OnlyEnforceIf(block_var)
+                    model.AddBoolOr([cond.Not() for cond in block_conditions]).OnlyEnforceIf(block_var.Not())
+                    
+                    # Premio proporzionale alla dimensione del blocco
+                    if block_size == bonus_block_size:
+                        # Bonus extra per blocchi della dimensione preferita
+                        block_weight = weight * 2
+                    else:
+                        # Premio normale per blocchi di dimensione minima
+                        block_weight = weight
+                    
+                    terms.append(SoftTerm(block_var, block_weight))
+                
+                # Bonus speciale per blocchi molto lunghi (4+ giorni)
+                if num_days - start_day >= 4:
+                    for long_block_size in range(4, min(6, num_days - start_day + 1)):  # Max 5 giorni consecutivi
+                        
+                        long_block_var = model.NewBoolVar(f"nurse{i}_long_block_{shift_type.name.lower()}_{start_day}_{long_block_size}")
+                        
+                        long_conditions = []
+                        
+                        # Tutti i giorni del blocco lungo devono avere questo turno
+                        for day_offset in range(long_block_size):
+                            day = start_day + day_offset
+                            long_conditions.append(nurse_shift[i, day, shift_val])
+                        
+                        # Bordi del blocco
+                        if start_day > 0:
+                            long_conditions.append(nurse_shift[i, start_day - 1, shift_val].Not())
+                        if start_day + long_block_size < num_days:
+                            long_conditions.append(nurse_shift[i, start_day + long_block_size, shift_val].Not())
+                        
+                        model.AddBoolAnd(long_conditions).OnlyEnforceIf(long_block_var)
+                        model.AddBoolOr([cond.Not() for cond in long_conditions]).OnlyEnforceIf(long_block_var.Not())
+                        
+                        # Bonus decrescente per blocchi troppo lunghi (evitare affaticamento)
+                        long_weight = weight * 3 // long_block_size  # Peso decrescente
+                        terms.append(SoftTerm(long_block_var, long_weight))
+    
     return terms
 
 @registry.soft_constraint("avoid_shift")

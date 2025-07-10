@@ -2,6 +2,16 @@
   {
     "type": "weekend_rest",
     "params": {},
-    "weight": 100
+    "weight": 100,
+    "description": "Approccio equo: peso x3 per primo weekend, peso normale per secondo"
+  },
+  {
+    "type": "shift_blocks",
+    "params": {
+      "min_block_size": 2,
+      "bonus_block_size": 3
+    },
+    "weight": 150,
+    "description": "Premia blocchi consecutivi di turni uguali (es. 3 mattine di fila, 2 pomeriggi consecutivi)"
   }
 ]

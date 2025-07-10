@@ -1,23 +1,13 @@
-# =========================
-#  model/scheduler.py
-# =========================
-"""High‑level OR‑Tools scheduler with pluggable constraint registry.
-Designed for extensibility: new constraint types can be added by
-registering a handler in `constraint_registry.py` without touching this
-module.
-
-The scheduler expects:
-    • nurses: List[Nurse]
-    • hard_constraints: List[Dict]
-    • soft_constraints: List[Dict]
-
-Any domain‑specific entity (Nurse, ShiftType, etc.) is assumed to be
-already defined in utils/enums.py or model/nurse.py.
+"""
+model/scheduler.py - AGGIORNATO PER WEEKEND DETECTION
+====================================================
+Aggiunge il parametro start_weekday per identificare sabati e domeniche.
 """
 
 from __future__ import annotations
 
 from typing import List, Dict, Tuple, Any
+from datetime import datetime
 
 from ortools.sat.python import cp_model
 
@@ -27,20 +17,23 @@ from model.nurse import Nurse
 
 
 class Scheduler:
-    """Industrial‑grade, extensible scheduler"""
+    """Industrial‑grade, extensible scheduler con supporto weekend detection"""
 
     def __init__(
-        self,
-        nurses: List[Nurse],
-        hard_constraints: List[Dict[str, Any]],
-        soft_constraints: List[Dict[str, Any]],
-        num_days: int = 7,
-        min_coverage: Dict[ShiftType, int] | None = None,
+            self,
+            nurses: List[Nurse],
+            hard_constraints: List[Dict[str, Any]],
+            soft_constraints: List[Dict[str, Any]],
+            num_days: int = 7,
+            min_coverage: Dict[ShiftType, int] | None = None,
+            start_weekday: int = 0,  # NUOVO: 0=lunedì, 6=domenica
     ) -> None:
         self.nurses = nurses
         self.hard_constraints = hard_constraints
         self.soft_constraints = soft_constraints
         self.num_days = num_days
+        self.start_weekday = start_weekday  # NUOVO
+
         # fall‑back coverage requirement if not provided by hard constraint
         self.min_coverage = (
                 min_coverage
@@ -71,7 +64,29 @@ class Scheduler:
         return status, self._extract_schedule(solver)
 
     # ------------------------------------------------------------------
-    # Internal helpers
+    # NUOVO: Metodo per identificare weekend
+    # ------------------------------------------------------------------
+    def get_weekend_days(self) -> List[Tuple[int, int]]:
+        """
+        Restituisce lista di coppie (sabato, domenica) nel periodo.
+
+        :return: Lista di tuple (indice_sabato, indice_domenica)
+        """
+        weekends = []
+
+        for day in range(self.num_days):
+            weekday = (self.start_weekday + day) % 7
+
+            # Se questo giorno è sabato (5) e c'è anche domenica (giorno successivo)
+            if weekday == 5 and day + 1 < self.num_days:
+                next_weekday = (self.start_weekday + day + 1) % 7
+                if next_weekday == 6:  # Domenica
+                    weekends.append((day, day + 1))
+
+        return weekends
+
+    # ------------------------------------------------------------------
+    # Internal helpers (modificati per passare weekend info)
     # ------------------------------------------------------------------
     def _build_decision_variables(self) -> None:
         self.nurse_shift: Dict[Tuple[int, int, int], cp_model.IntVar] = {}
@@ -95,13 +110,20 @@ class Scheduler:
         # Built‑in: coverage minimum fallback (overridden by explicit hard constraint)
         self._fallback_coverage_constraints()
 
-        # Registry‑driven constraints
+        # Registry‑driven constraints (ora passano anche weekend info se necessario)
         for h in self.hard_constraints:
             c_type = h["type"]
             handler = registry.hard.get(c_type)
             if handler is None:
                 raise ValueError(f"Unknown hard constraint type '{c_type}'")
-            handler(self.model, self.nurse_shift, self.nurses, h["params"], self.num_days)
+
+            # Passa parametri standard + weekend info per vincoli che ne hanno bisogno
+            if c_type in ["weekend_rest_monthly"]:
+                # Modifica il call per passare info weekend
+                handler(self.model, self.nurse_shift, self.nurses, h["params"],
+                        self.num_days, self.start_weekday)
+            else:
+                handler(self.model, self.nurse_shift, self.nurses, h["params"], self.num_days)
 
     def _build_objective(self) -> None:
         objective_terms: List[SoftTerm] = []
@@ -111,20 +133,33 @@ class Scheduler:
             handler = registry.soft.get(c_type)
             if handler is None:
                 raise ValueError(f"Unknown soft constraint type '{c_type}'")
-            terms = handler(
-                self.model,
-                self.nurse_shift,
-                self.nurses,
-                s["params"],
-                self.num_days,
-                weight,
-            )
+
+            # Passa weekend info ai soft constraints che ne hanno bisogno
+            if c_type == "weekend_rest":
+                terms = handler(
+                    self.model,
+                    self.nurse_shift,
+                    self.nurses,
+                    s["params"],
+                    self.num_days,
+                    weight,
+                    self.start_weekday  # NUOVO parametro
+                )
+            else:
+                terms = handler(
+                    self.model,
+                    self.nurse_shift,
+                    self.nurses,
+                    s["params"],
+                    self.num_days,
+                    weight,
+                )
             if terms:
                 objective_terms.extend(terms)
         if objective_terms:
             self.model.Maximize(sum(term.expr * term.weight for term in objective_terms))
 
-    # ---------------- private helpers ----------------
+    # ---------------- private helpers (unchanged) ----------------
     def _fallback_coverage_constraints(self):
         for d in range(self.num_days):
             for shift in ShiftType:
