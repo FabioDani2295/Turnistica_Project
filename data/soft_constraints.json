@@ -1,1 +1,7 @@
-[]
+[
+  {
+    "type": "weekend_rest",
+    "params": {},
+    "weight": 100
+  }
+]

@@ -1,7 +1,7 @@
 """
-Soft constraint (o preferenza)
-Rappresentano obiettivi di qualità, non requisiti assoluti.
-Per “soft constraint” si intende infatti una regola che idealmente si vorrebbe soddisfare, ma che—se non è possibile—può essere infranta a fronte di una penalità.
+parser/soft_constraint_loader.py - VERSIONE AGGIORNATA
+------------------------------------------------------
+Aggiunge il nuovo tipo di soft constraint per i weekend.
 """
 
 from __future__ import annotations
@@ -16,7 +16,7 @@ _SUPPORTED_SOFT_TYPES: set[str] = {
     "avoid_shift",
     "equity",
     "workload_balance",
-    # possibile estensione futura
+    "weekend_rest",  # AGGIUNTO!
 }
 
 

@@ -7,8 +7,7 @@
   { "type": "no_afternoon_after_morning",  "params": {} },
   { "type": "mandatory_smonto_after_night","params": {} },
   { "type": "mandatory_rest_after_smonto", "params": {} },
-  { "type": "shift_balance_morning_afternoon","params": { "max_discrepancy": 0.65 } },
+  { "type": "shift_balance_morning_afternoon","params": { "max_discrepancy": 0.6 } },
   { "type": "workload_balance_hard",       "params": { "tolerance": 0.25, "daily_shifts": 5 } },
-  { "type": "max_nights_per_month",        "params": { "max_monthly": 4 } },
-  { "type": "weekend_rest_monthly",        "params": { "free_weekends": 2 } }
+  { "type": "max_nights_per_month",        "params": { "max_monthly": 4 } }
 ]

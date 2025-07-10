@@ -18,13 +18,6 @@ class Nurse:
     contracted_hours: int  # ore MENSILI (modificato da settimanali)
     preferences: Dict[str, Optional[List[int]]] = field(default_factory=dict)
 
-    def max_shifts_weekly(self, hours_per_shift: int = 8) -> int:
-        """
-        Calcola il numero massimo di turni a settimana sulla base del contratto.
-        MODIFICATO: Ora divide le ore mensili per 4.
-        """
-        weekly_hours = self.contracted_hours / 4.0
-        return int(weekly_hours // hours_per_shift)
 
     def max_shifts_monthly(self, hours_per_shift: int = 8) -> int:
         """
@@ -33,19 +26,16 @@ class Nurse:
         """
         return self.contracted_hours // hours_per_shift
 
-    def max_shifts(self, hours_per_shift: int = 8, period_days: int = 7) -> int:
+    def max_shifts(self, hours_per_shift: int = 8, period_days: int = 30) -> int:
         """
         Calcola il numero massimo di turni per il periodo specificato.
-        MODIFICATO: Gestisce automaticamente periodi settimanali/mensili.
+        Supporta solo pianificazione mensile e periodi personalizzati.
 
         :param hours_per_shift: ore per turno (default 8)
-        :param period_days: giorni del periodo (7=settimana, 30=mese, etc.)
+        :param period_days: giorni del periodo (default 30 per mese)
         :return: numero massimo turni
         """
-        if period_days == 7:
-            # Settimana
-            return self.max_shifts_weekly(hours_per_shift)
-        elif period_days >= 28 and period_days <= 31:
+        if period_days >= 28 and period_days <= 31:
             # Mese
             return self.max_shifts_monthly(hours_per_shift)
         else:

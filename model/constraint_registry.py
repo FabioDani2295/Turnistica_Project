@@ -244,20 +244,30 @@ def hc_workload_balance_hard(
     """Bilanciamento HARD del carico di lavoro"""
     tol = params.get("tolerance", 0.25)
     daily = params.get("daily_shifts", 5)
-    factor = (1/4) if num_days == 7 else (num_days / 30.0)
+
+    # FIX: Per i mesi usa direttamente le ore mensili
+    if num_days == 7:
+        factor = 1 / 4  # Settimana: ore mensili / 4
+    elif num_days >= 28 and num_days <= 31:
+        factor = 1.0  # Mese: usa ore mensili direttamente
+    else:
+        factor = num_days / 30.0  # Periodo custom
+
     total_h = sum(n.contracted_hours * factor for n in nurses)
     req = daily * num_days
+
     for i, n in enumerate(nurses):
         h = n.contracted_hours * factor
-        ideal = (h / total_h) * req
-        min_s = int(ideal * (1 - tol))
+        ideal = (h / total_h) * req if total_h > 0 else 0
+        min_s = max(0, int(ideal * (1 - tol)))
         max_s = min(int(ideal * (1 + tol)) + 1, int(h / 8))
+
         total_w = sum(
             nurse_shift[i, d, s.value]
             for d in range(num_days)
             for s in [ShiftType.MORNING, ShiftType.AFTERNOON, ShiftType.NIGHT]
         )
-        model.Add(total_w >= max(0, min_s))
+        model.Add(total_w >= min_s)
         model.Add(total_w <= max_s)
 
 @registry.hard_constraint("max_nights_per_month")
@@ -288,7 +298,7 @@ def hc_weekend_rest_monthly(
     params,
     num_days: int
 ):
-    """Esattamente free_weekends weekend liberi (sab+dom)"""
+    """Almeno free_weekends weekend liberi (sab+dom)"""
     free_req = int(params.get("free_weekends", 2))
     if num_days < 7:
         return
@@ -303,7 +313,7 @@ def hc_weekend_rest_monthly(
             model.Add(sum_sat == 0).OnlyEnforceIf(free_w)
             model.Add(sum_sat > 0).OnlyEnforceIf(free_w.Not())
             flags.append(free_w)
-        model.Add(sum(flags) == free_req)
+        model.Add(sum(flags) >= free_req)
 
 # -----------------------------
 # SOFT CONSTRAINTS
@@ -321,6 +331,60 @@ def sc_prefer_shift(
     idx = {n.name: i for i, n in enumerate(nurses)}[params["nurse"]]
     stype = ShiftType(params["shift"]).value
     return [SoftTerm(nurse_shift[idx, d, stype], weight) for d in range(num_days)]
+
+
+"""
+Aggiungi questo codice al file model/constraint_registry.py
+----------------------------------------------------------
+Soft constraint semplice per weekend liberi.
+"""
+
+
+@registry.soft_constraint("weekend_rest")
+def sc_weekend_rest(
+        model: cp_model.CpModel,
+        nurse_shift,
+        nurses: List[Nurse],
+        params,
+        num_days: int,
+        weight: int
+) -> List[SoftTerm]:
+    """
+    Soft constraint: premia ogni infermiere che ha almeno una coppia
+    di giorni consecutivi liberi (potenziale weekend).
+
+    Questo approccio è agnostico rispetto al giorno della settimana iniziale.
+    """
+    terms = []
+
+    for i in range(len(nurses)):
+        # Per ogni infermiere, trova tutte le coppie di giorni consecutivi liberi
+        free_pairs = []
+
+        # Controlla ogni coppia di giorni consecutivi
+        for d in range(num_days - 1):
+            # Variabile: questa coppia di giorni è libera?
+            pair_free = model.NewBoolVar(f"nurse{i}_days{d}_{d + 1}_free")
+
+            # La coppia è libera se non ci sono turni in nessuno dei due giorni
+            day1_shifts = sum(nurse_shift[i, d, s.value] for s in ShiftType)
+            day2_shifts = sum(nurse_shift[i, d + 1, s.value] for s in ShiftType)
+
+            model.Add(day1_shifts + day2_shifts == 0).OnlyEnforceIf(pair_free)
+            model.Add(day1_shifts + day2_shifts > 0).OnlyEnforceIf(pair_free.Not())
+
+            free_pairs.append(pair_free)
+
+        # Ha almeno una coppia di giorni liberi?
+        if free_pairs:
+            has_free_pair = model.NewBoolVar(f"nurse{i}_has_free_pair")
+            model.AddBoolOr(free_pairs).OnlyEnforceIf(has_free_pair)
+            model.AddBoolAnd([p.Not() for p in free_pairs]).OnlyEnforceIf(has_free_pair.Not())
+
+            # Premio per avere almeno una coppia libera
+            terms.append(SoftTerm(has_free_pair, weight))
+
+    return terms
 
 @registry.soft_constraint("avoid_shift")
 def sc_avoid_shift(

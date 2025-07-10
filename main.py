@@ -6,7 +6,7 @@ Carica dati da file JSON, costruisce il modello OR-Tools, risolve il problema
 e visualizza il piano turni risultante. In caso di infeasibility, esegue
 analisi diagnostica automatica.
 
-Supporta pianificazione per periodi personalizzabili (settimane, mesi, periodi custom). okook
+Supporta solo pianificazione mensile basata sul calendario reale.
 """
 
 import sys
@@ -20,7 +20,7 @@ from parser.solution_analyzer import SolutionAnalyzer
 from model.scheduler import Scheduler
 from ortools.sat.python import cp_model
 
-from utils.date_manager import interactive_period_selection, DateManager
+from utils.date_manager import get_next_month_period, DateManager
 from utils.schedule_formatter import ScheduleFormatter
 
 
@@ -41,8 +41,8 @@ def main():
     print()
 
     try:
-        # Selezione periodo interattiva
-        start_date, num_days, period_desc = interactive_period_selection()
+        # Pianificazione automatica del prossimo mese
+        start_date, num_days, period_desc = get_next_month_period()
 
         # Genera etichette date
         dm = DateManager(start_date)
@@ -57,7 +57,7 @@ def main():
         print(f"🔒 Vincoli rigidi:      {len(hard_constraints)}")
         print(f"🔓 Vincoli flessibili:  {len(soft_constraints)}")
         print(f"📅 Periodo:             {period_desc}")
-        print(f"📊 Giorni da pianificare: {num_days}")
+        print(f"📊 Giorni da pianificare: {num_days} (mensile)")
         print()
 
         # Risoluzione

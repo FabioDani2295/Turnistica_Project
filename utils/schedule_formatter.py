@@ -1,9 +1,8 @@
 """
-utils/schedule_formatter.py
----------------------------
+utils/schedule_formatter.py - VERSIONE CORRETTA CON SMONTO
+----------------------------------------------------------
 Formattazione e visualizzazione dei piani turni in formato tabellare.
-Supporta visualizzazione matriciale con infermieri su righe e giorni su colonne.
-MODIFICATO: ore contratto sono ora mensili, calcolate automaticamente per settimane/mesi.
+CORRETTO: Include lo smonto (S) nella visualizzazione.
 """
 
 from __future__ import annotations
@@ -31,7 +30,7 @@ class ScheduleFormatter:
         Formato:
         - Righe: infermieri con % contratto e ore effettive
         - Colonne: giorni
-        - Valori: R=riposo, M=mattino, P=pomeriggio, N=notte
+        - Valori: R=riposo, M=mattino, P=pomeriggio, N=notte, S=smonto
         """
         print("📋 PIANO TURNI - FORMATO TABELLARE")
         print("=" * (50 + len(self.period_desc)))
@@ -58,7 +57,7 @@ class ScheduleFormatter:
         Costruisce matrice [infermiere][giorno] = tipo_turno.
 
         :param schedule: schedule da OR-Tools
-        :return: matrice con R=riposo, M=mattino, P=pomeriggio, N=notte
+        :return: matrice con R=riposo, M=mattino, P=pomeriggio, N=notte, S=smonto
         """
         # Inizializza matrice con R (riposo)
         matrix = [['R' for _ in range(self.num_days)] for _ in range(len(self.nurses))]
@@ -75,8 +74,13 @@ class ScheduleFormatter:
                 for nurse_name in assigned_nurses:
                     if nurse_name in name_to_idx:
                         nurse_idx = name_to_idx[nurse_name]
-                        # M=mattino, P=pomeriggio, N=notte
-                        shift_letters = {'morning': 'M', 'afternoon': 'P', 'night': 'N'}
+                        # CORRETTO: Incluso lo smonto nel mapping
+                        shift_letters = {
+                            'morning': 'M',
+                            'afternoon': 'P',
+                            'night': 'N',
+                            'smonto': 'S'  # AGGIUNTO!
+                        }
                         matrix[nurse_idx][day_idx] = shift_letters.get(shift_name, 'R')
 
         return matrix
@@ -101,15 +105,16 @@ class ScheduleFormatter:
     def _print_nurse_row(self, nurse: Nurse, shifts: List[str]) -> None:
         """
         Stampa riga di un infermiere con ore contrattuali, effettive e differenza.
+        NOTA: Lo smonto NON conta come ore lavorate.
 
         :param nurse: oggetto infermiere
         :param shifts: lista turni per ogni giorno (lettere)
         """
-        # Calcola statistiche
-        worked_shifts = sum(1 for shift in shifts if shift != 'R')
+        # Calcola statistiche - SMONTO NON CONTA COME ORE LAVORATE
+        worked_shifts = sum(1 for shift in shifts if shift in ['M', 'P', 'N'])  # Escluso 'S'
         worked_hours = worked_shifts * 8  # 8 ore per turno
 
-        # Ore contrattuali per il periodo (MODIFICATO: ora monthly_hours è mensile)
+        # Ore contrattuali per il periodo
         contract_hours_period = self._calculate_contract_hours_for_period(nurse.contracted_hours)
 
         # Differenza (positiva = sopra contratto, negativa = sotto contratto)
@@ -133,7 +138,6 @@ class ScheduleFormatter:
     def _calculate_contract_hours_for_period(self, monthly_hours: int) -> float:
         """
         Calcola le ore contrattuali per il periodo specifico.
-        MODIFICATO: monthly_hours è ora il contratto mensile, non settimanale.
 
         :param monthly_hours: ore mensili da contratto
         :return: ore totali per il periodo
@@ -146,24 +150,15 @@ class ScheduleFormatter:
             return float(monthly_hours)
         else:
             # Periodo personalizzato: proporzione su base mensile
-            return monthly_hours * (self.num_days / 30.0)  # Base 30 giorni
-
-    def _get_shift_symbol(self, shift_code: str) -> str:
-        """
-        Converte codice turno in simbolo leggibile.
-
-        :param shift_code: R=riposo, M=mattino, P=pomeriggio, N=notte
-        :return: simbolo da stampare
-        """
-        return shift_code  # Ora usiamo direttamente le lettere
+            return monthly_hours * (self.num_days / 30.0)
 
     def _print_legend(self) -> None:
         """Stampa legenda simboli."""
         print()
         print("📖 LEGENDA:")
-        print("   R = Riposo | M = Mattino | P = Pomeriggio | N = Notte")
+        print("   R = Riposo | M = Mattino | P = Pomeriggio | N = Notte | S = Smonto")
         print("   OreCtr = Ore da contratto per il periodo (base mensile)")
-        print("   OreEff = Ore effettivamente pianificate")
+        print("   OreEff = Ore effettivamente pianificate (smonto NON conta)")
         print("   Diff = Differenza (+ sopra contratto, - sotto contratto)")
         print()
 
@@ -182,8 +177,9 @@ class ScheduleFormatter:
             morning_count = shifts.count('M')
             afternoon_count = shifts.count('P')
             night_count = shifts.count('N')
+            smonto_count = shifts.count('S')  # AGGIUNTO
             rest_count = shifts.count('R')
-            total_shifts = morning_count + afternoon_count + night_count
+            total_shifts = morning_count + afternoon_count + night_count  # Smonto NON conta
 
             hours_worked = total_shifts * 8
             contract_hours_period = self._calculate_contract_hours_for_period(nurse.contracted_hours)
@@ -192,7 +188,7 @@ class ScheduleFormatter:
             diff_str = f"{diff_hours:+.0f}h" if diff_hours != 0 else "±0h"
 
             print(f"   👤 {nurse.name:<18} | "
-                  f"M:{morning_count:2} P:{afternoon_count:2} N:{night_count:2} R:{rest_count:2} | "
+                  f"M:{morning_count:2} P:{afternoon_count:2} N:{night_count:2} S:{smonto_count:2} R:{rest_count:2} | "
                   f"Tot: {total_shifts:2} turni ({hours_worked:3}h) | "
                   f"Contratto: {contract_hours_period:3.0f}h ({diff_str})")
 
@@ -200,34 +196,19 @@ class ScheduleFormatter:
 
         # Sommario generale
         total_contract_hours = sum(self._calculate_contract_hours_for_period(n.contracted_hours) for n in self.nurses)
-        total_worked_hours = sum(sum(1 for shift in nurse_shifts if shift != 'R') * 8 for nurse_shifts in shift_matrix)
+        total_worked_hours = sum(
+            sum(1 for shift in nurse_shifts if shift in ['M', 'P', 'N']) * 8
+            for nurse_shifts in shift_matrix
+        )
+        total_smonto_days = sum(
+            sum(1 for shift in nurse_shifts if shift == 'S')
+            for nurse_shifts in shift_matrix
+        )
         overall_diff = total_worked_hours - total_contract_hours
 
         print(f"📈 SOMMARIO GENERALE:")
         print(f"   Ore contrattuali totali: {total_contract_hours:.0f}h")
         print(f"   Ore pianificate totali:  {total_worked_hours}h")
+        print(f"   Giorni di smonto totali: {total_smonto_days}")
         print(f"   Differenza complessiva:  {overall_diff:+.0f}h")
         print()
-
-
-def print_compact_schedule(schedule: List[Dict[str, Any]], date_labels: List[str], period_desc: str) -> None:
-    """
-    Funzione di utilità per stampare rapidamente un piano turni.
-
-    :param schedule: schedule da OR-Tools
-    :param date_labels: etichette delle date
-    :param period_desc: descrizione del periodo
-    """
-    # Se non abbiamo infermieri dal schedule, estraiamoli
-    all_nurses = set()
-    for day_data in schedule:
-        for shift_name in ['morning', 'afternoon', 'night']:
-            nurses = day_data.get(shift_name, [])
-            all_nurses.update(nurses)
-
-    # Crea oggetti Nurse semplificati per la visualizzazione
-    from model.nurse import Nurse
-    nurses = [Nurse(name=name, contracted_hours=160) for name in sorted(all_nurses)]  # 160h = esempio mensile
-
-    formatter = ScheduleFormatter(nurses, date_labels, period_desc)
-    formatter.print_schedule_table(schedule)
