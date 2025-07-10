@@ -551,6 +551,60 @@ def sc_shift_blocks(
     
     return terms
 
+@registry.hard_constraint("forced_assignment")
+def hc_forced_assignment(
+    model: cp_model.CpModel,
+    nurse_shift,
+    nurses: List[Nurse],
+    params,
+    num_days: int,
+    start_weekday: int = 0
+):
+    """
+    Hard constraint: forza un'assegnazione specifica per supportare modifiche.
+    """
+    nurse_idx = params["nurse_idx"]
+    day = params["day"]
+    shift_type_val = params["shift_type"]
+    must_assign = params.get("must_assign", True)
+    
+    if must_assign:
+        model.Add(nurse_shift[nurse_idx, day, shift_type_val] == 1)
+    else:
+        model.Add(nurse_shift[nurse_idx, day, shift_type_val] == 0)
+
+@registry.soft_constraint("stability_penalty")
+def sc_stability_penalty(
+    model: cp_model.CpModel,
+    nurse_shift,
+    nurses: List[Nurse],
+    params,
+    num_days: int,
+    weight: int,
+    start_weekday: int = 0
+) -> List[SoftTerm]:
+    """
+    Soft constraint: penalizza deviazioni dal piano originale per favorire stabilità.
+    """
+    terms = []
+    original_hints = params.get("original_plan_hints", {})
+    
+    for (nurse_idx, day, shift_val), original_value in original_hints.items():
+        if (nurse_idx, day, shift_val) in nurse_shift:
+            var = nurse_shift[nurse_idx, day, shift_val]
+            
+            if original_value == 1:
+                # Premio per mantenere assegnazioni esistenti
+                terms.append(SoftTerm(var, weight))
+            else:
+                # Penalità per creare nuove assegnazioni dove non c'erano
+                penalty_var = model.NewBoolVar(f"stability_penalty_{nurse_idx}_{day}_{shift_val}")
+                model.Add(var == 1).OnlyEnforceIf(penalty_var)
+                model.Add(var == 0).OnlyEnforceIf(penalty_var.Not())
+                terms.append(SoftTerm(penalty_var, -weight))  # Penalità negativa
+    
+    return terms
+
 @registry.soft_constraint("avoid_shift")
 def sc_avoid_shift(
     model: cp_model.CpModel,

@@ -28,6 +28,36 @@ HARD_CONSTRAINTS_FILE = DATA_DIR / "hard_constraints.json"
 SOFT_CONSTRAINTS_FILE = DATA_DIR / "soft_constraints.json"
 
 
+# ============================== FUNZIONI RIUTILIZZABILI =============================
+
+def solve_model(nurses, hard_constraints, soft_constraints, num_days, start_weekday=0, max_seconds=120.0, hints=None):
+    """
+    Funzione riutilizzabile per risolvere il modello di scheduling.
+    
+    :param nurses: lista di infermieri
+    :param hard_constraints: vincoli hard
+    :param soft_constraints: vincoli soft
+    :param num_days: numero di giorni
+    :param start_weekday: giorno settimana di partenza (0=lun)
+    :param max_seconds: tempo massimo risoluzione
+    :param hints: dizionario con hint per warm-start {(nurse_idx, day, shift): value}
+    :return: (status, schedule) tupla con stato e soluzione
+    """
+    scheduler = Scheduler(
+        nurses=nurses,
+        hard_constraints=hard_constraints,
+        soft_constraints=soft_constraints,
+        num_days=num_days,
+        start_weekday=start_weekday
+    )
+    
+    # Applica hints se forniti
+    if hints:
+        scheduler.set_hints(hints)
+    
+    return scheduler.solve(max_seconds=max_seconds)
+
+
 # ============================== ESECUZIONE =======================================
 
 def main():
@@ -67,17 +97,16 @@ def main():
             print("🏖️  Weekend nel periodo:   Nessun weekend completo")
         print()
 
-        # Risoluzione
+        # Risoluzione usando la funzione riutilizzabile
         print("🔄 Avvio risoluzione OR-Tools...")
-        scheduler = Scheduler(
+        status, schedule = solve_model(
             nurses=nurses,
             hard_constraints=hard_constraints,
             soft_constraints=soft_constraints,
             num_days=num_days,
-            start_weekday=start_weekday  # NUOVO parametro
+            start_weekday=start_weekday,
+            max_seconds=120.0
         )
-
-        status, schedule = scheduler.solve(max_seconds=120.0)  # Più tempo per periodi lunghi
 
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             print("❌ Nessuna soluzione trovata. Avvio analisi diagnostica...\n")

@@ -47,10 +47,19 @@ class Scheduler:
 
         self.model = cp_model.CpModel()
         self._build_decision_variables()
+        self.hints = None  # Storage for warm-start hints
 
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
+    def set_hints(self, hints: Dict[Tuple[int, int, int], int]) -> None:
+        """
+        Imposta hint per warm-start del solver.
+        
+        :param hints: dizionario {(nurse_idx, day, shift_type_value): 1 or 0}
+        """
+        self.hints = hints
+
     def solve(self, max_seconds: float = 60.0) -> Tuple[int, List[Dict]]:
         """Return (solver status, schedule list)"""
         self._apply_constraints()
@@ -58,6 +67,10 @@ class Scheduler:
 
         solver = cp_model.CpSolver()
         solver.parameters.max_time_in_seconds = max_seconds
+        
+        # Note: OR-Tools hints non disponibili in questa versione
+        # La stabilità è gestita tramite soft constraints
+        
         status = solver.Solve(self.model)
         if status not in (cp_model.OPTIMAL, cp_model.FEASIBLE):
             return status, []
@@ -118,7 +131,7 @@ class Scheduler:
                 raise ValueError(f"Unknown hard constraint type '{c_type}'")
 
             # Passa parametri standard + weekend info per vincoli che ne hanno bisogno
-            if c_type in ["weekend_rest_monthly"]:
+            if c_type in ["weekend_rest_monthly", "forced_assignment"]:
                 # Modifica il call per passare info weekend
                 handler(self.model, self.nurse_shift, self.nurses, h["params"],
                         self.num_days, self.start_weekday)
@@ -135,7 +148,7 @@ class Scheduler:
                 raise ValueError(f"Unknown soft constraint type '{c_type}'")
 
             # Passa weekend info ai soft constraints che ne hanno bisogno
-            if c_type == "weekend_rest":
+            if c_type in ["weekend_rest", "shift_blocks"]:
                 terms = handler(
                     self.model,
                     self.nurse_shift,

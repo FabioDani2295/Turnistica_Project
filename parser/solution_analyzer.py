@@ -13,6 +13,7 @@ from collections import defaultdict
 from model.nurse import Nurse
 from utils.enums import ShiftType
 from utils.config import WEEKDAY_NAMES, SHIFT_LABELS
+from utils.schedule_formatter import ScheduleFormatter
 
 
 class SolutionAnalyzer:
@@ -329,3 +330,94 @@ class SolutionAnalyzer:
                 print(f"{i}. {suggestion}")
 
         print("\n" + "=" * 50)
+
+
+def compare_plans(plan_old: List[Dict], plan_new: List[Dict], nurses: List[Nurse]) -> Dict[str, Any]:
+    """
+    Confronta due piani di turni e restituisce un report dettagliato delle differenze.
+    
+    :param plan_old: piano originale (formato schedule)
+    :param plan_new: piano modificato (formato schedule)  
+    :param nurses: lista degli infermieri
+    :return: dizionario con statistiche delle modifiche
+    """
+    if len(plan_old) != len(plan_new):
+        raise ValueError("I piani devono avere lo stesso numero di giorni")
+    
+    # Converte i piani in matrici per facilitare il confronto
+    num_days = len(plan_old)
+    date_labels = [f"Day{i}" for i in range(num_days)]  # Date fittizie per il formatter
+    formatter = ScheduleFormatter(nurses, date_labels, "Confronto")
+    matrix_old = formatter._build_shift_matrix(plan_old)
+    matrix_new = formatter._build_shift_matrix(plan_new)
+    
+    num_nurses = len(nurses)
+    
+    # Statistiche delle modifiche
+    total_changes = 0
+    affected_nurses = set()
+    changes_by_day = defaultdict(int)
+    changes_by_nurse = defaultdict(int)
+    changes_by_type = defaultdict(int)
+    
+    detailed_changes = []
+    
+    for nurse_idx in range(num_nurses):
+        for day in range(num_days):
+            old_shift = matrix_old[nurse_idx][day]
+            new_shift = matrix_new[nurse_idx][day]
+            
+            if old_shift != new_shift:
+                total_changes += 1
+                affected_nurses.add(nurse_idx)
+                changes_by_day[day] += 1
+                changes_by_nurse[nurse_idx] += 1
+                
+                # Classifica il tipo di modifica
+                if old_shift == 'R' and new_shift != 'R':
+                    change_type = "new_assignment"
+                elif old_shift != 'R' and new_shift == 'R':
+                    change_type = "removed_assignment"
+                elif old_shift != 'R' and new_shift != 'R':
+                    change_type = "shift_change"
+                else:
+                    change_type = "other"
+                
+                changes_by_type[change_type] += 1
+                
+                detailed_changes.append({
+                    "nurse": nurses[nurse_idx].name,
+                    "nurse_idx": nurse_idx,
+                    "day": day,
+                    "old_shift": old_shift,
+                    "new_shift": new_shift,
+                    "change_type": change_type
+                })
+    
+    # Calcola metriche di impatto
+    impact_percentage = (total_changes / (num_nurses * num_days)) * 100
+    nurses_affected_percentage = (len(affected_nurses) / num_nurses) * 100
+    
+    # Giorni con più modifiche
+    most_affected_days = sorted(changes_by_day.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    # Infermieri con più modifiche  
+    most_affected_nurses = sorted(changes_by_nurse.items(), key=lambda x: x[1], reverse=True)[:3]
+    
+    return {
+        "total_changes": total_changes,
+        "affected_nurses_count": len(affected_nurses),
+        "affected_nurses_percentage": nurses_affected_percentage,
+        "impact_percentage": impact_percentage,
+        "changes_by_day": dict(changes_by_day),
+        "changes_by_nurse": dict(changes_by_nurse),
+        "changes_by_type": dict(changes_by_type),
+        "most_affected_days": most_affected_days,
+        "most_affected_nurses": [(nurses[idx].name, count) for idx, count in most_affected_nurses],
+        "detailed_changes": detailed_changes,
+        "summary": {
+            "low_impact": total_changes <= num_nurses * 0.1,  # Meno del 10% del totale possibile
+            "medium_impact": num_nurses * 0.1 < total_changes <= num_nurses * 0.3,
+            "high_impact": total_changes > num_nurses * 0.3
+        }
+    }
