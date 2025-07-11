@@ -25,7 +25,9 @@ _SUPPORTED_HARD_TYPES: set[str] = {
     "no_afternoon_after_morning",
     "max_nights_per_month",
     "weekend_rest_monthly",
-    "shift_balance_morning_afternoon"
+    "shift_balance_morning_afternoon",
+    "nurse_absence",                     # AGGIUNTO - assenze programmate
+    "predefined_shifts"                  # AGGIUNTO - turni predefiniti
 }
 
 

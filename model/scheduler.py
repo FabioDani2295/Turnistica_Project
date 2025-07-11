@@ -118,8 +118,8 @@ class Scheduler:
                 raise ValueError(f"Unknown hard constraint type '{c_type}'")
 
             # Passa parametri standard + weekend info per vincoli che ne hanno bisogno
-            if c_type in ["weekend_rest_monthly"]:
-                # Modifica il call per passare info weekend
+            if c_type in ["weekend_rest_monthly", "nurse_absence", "predefined_shifts"]:
+                # Modifica il call per passare info weekend/day info
                 handler(self.model, self.nurse_shift, self.nurses, h["params"],
                         self.num_days, self.start_weekday)
             else:
